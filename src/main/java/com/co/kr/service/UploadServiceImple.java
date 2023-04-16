@@ -211,5 +211,16 @@ public class UploadServiceImple implements UploadService {
 	public void bdFileRemove(BoardFileDomain boardFileDomain) {
 		uploadMapper.bdFileRemove(boardFileDomain);
 	}
+	// 하나만 가져오기
+	@Override
+	public BoardListDomain boardSelectOne(HashMap<String, Object> map) {
+		return uploadMapper.boardSelectOne(map);
+	}
+
+	// 하나 게시글 파일만 가져오기
+	@Override
+	public List<BoardFileDomain> boardSelectOneFile(HashMap<String, Object> map) {
+		return uploadMapper.boardSelectOneFile(map);
+	}
 
 }
