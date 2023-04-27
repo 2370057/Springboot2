@@ -177,6 +177,6 @@ public class FileListController {
 		List<BoardListDomain> items = uploadService.boardList();
 		mav.addObject("items", items);
 		return mav;
-	}
+	} 
 
 }

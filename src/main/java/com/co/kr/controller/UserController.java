@@ -91,16 +91,29 @@ public class UserController {
 		mav.setViewName("board/boardList.html");
 		return mav; 
 	}
+	
+	
+	
+	//대시보드 리스트 보여주기
 	@GetMapping("mbList")
 	public ModelAndView mbList(HttpServletRequest request) {
 			
 		ModelAndView mav = new ModelAndView();
 		HttpSession session = request.getSession();
-		String page = (String) session.getAttribute("page"); // session에 담고 있는 page 꺼냄
-		if(page == null)page = "1"; // 없으면 1
 		
-		//클릭페이지 세션에 담아줌
-		session.setAttribute("page", page);
+		//session저장 page 가져오기
+		String page = (String) session.getAttribute("page"); // session에 담고 있는 page 꺼냄
+		//request param 저장 page 가져오기
+		String paramPage = request.getParameter("page");
+		
+		
+		if(paramPage != null) { //param 있으면
+			session.setAttribute("page", paramPage);
+		}else if(page != null) { //session 있으면
+			session.setAttribute("page", page);
+		}else {
+			session.setAttribute("page", "1");
+		}
 		
 		//페이지네이션
 		mav = mbListCall(request);  //리스트만 가져오기
@@ -152,159 +165,184 @@ public class UserController {
 		
 		return mav;
 	}
+	
+	
 	//수정페이지 이동
-		@GetMapping("/modify/{mbSeq}")
-	    public ModelAndView mbModify(@PathVariable("mbSeq") String mbSeq, RedirectAttributes re) throws IOException {
-			ModelAndView mav = new ModelAndView();
-			re.addAttribute("mbSeq", mbSeq);
-			mav.setViewName("redirect:/mbEditList");
-			return mav;
-		}
+	@GetMapping("/modify/{mbSeq}")
+    public ModelAndView mbModify(@PathVariable("mbSeq") String mbSeq, RedirectAttributes re) throws IOException {
+		ModelAndView mav = new ModelAndView();
+		re.addAttribute("mbSeq", mbSeq);
+		mav.setViewName("redirect:/mbEditList");
+		return mav;
+	};
+	
+	
+	//대시보드 리스트 보여주기
+	@GetMapping("mbEditList")
+	public ModelAndView mbListEdit(@RequestParam("mbSeq") String mbSeq, HttpServletRequest request) {
+		
+		ModelAndView mav = new ModelAndView();
+		// 해당리스트 가져옴
+		mav = mbListCall(request);  //리스트만 가져오기
+		Map map = new HashMap<String, String>();
+		map.put("mbSeq", mbSeq);
+		LoginDomain loginDomain = userService.mbSelectList(map);
+		System.out.println("loginDomain"+loginDomain.getMbLevel());
+		mav.addObject("item",loginDomain);
+		mav.setViewName("admin/adminEditList.html");
+		return mav; 
+	}
+	
+	//수정업데이트
+	@RequestMapping("/update")
+	public ModelAndView mbModify(LoginVO loginVO, HttpServletRequest request, RedirectAttributes re) throws IOException {
+		
+		ModelAndView mav = new ModelAndView();
+		
+		//page 초기화
+		HttpSession session = request.getSession();
+		
+		String page = "1"; // 업데이트 되면 가장 첫화면으로 갈 것이다.  
+		
+		//db 업데이트
+		LoginDomain loginDomain = null; //초기화
+		String IP = CommonUtils.getClientIP(request);
+		loginDomain = LoginDomain.builder()
+				.mbSeq(Integer.parseInt(loginVO.getSeq()))
+				.mbId(loginVO.getId())
+				.mbPw(loginVO.getPw())
+				.mbLevel(loginVO.getLevel())
+				.mbIp(IP)
+				.mbUse("Y")
+				.build();
+		userService.mbUpdate(loginDomain);
+		
+		//첫 페이지로 이동
+		re.addAttribute("page",page); // 리다이렉트시 파람으로 실어서 보냄
+		mav.setViewName("redirect:/mbList");
+		return mav;
+	}
+	
+	
+	//삭제
+	@GetMapping("/remove/{mbSeq}")
+    public ModelAndView mbRemove(@PathVariable("mbSeq") String mbSeq, RedirectAttributes re, HttpServletRequest request) throws IOException {
+		ModelAndView mav = new ModelAndView();
+		
+		//db 삭제
+		Map map = new HashMap<String, String>();
+		map.put("mbSeq", mbSeq);
+		userService.mbRemove(map);
+		//page 초기화
+		HttpSession session = request.getSession();
+				
+		//보고 있던 현재 페이지로 이동
+		re.addAttribute("page",session.getAttribute("page")); // 리다이렉트시 파람으로 실어서 보냄
+		mav.setViewName("redirect:/mbList");
+		return mav;
+	}
+	
+	
+	// 어드민의 멤버추가 & 회원가입
+	@PostMapping("create")
+	public ModelAndView create(LoginVO loginVO, HttpServletRequest request,HttpServletResponse response) throws IOException {
+		
+		ModelAndView mav = new ModelAndView();
+		
+		//session 처리 
+		HttpSession session = request.getSession();
+		
+		//페이지 초기화
+		String page = (String) session.getAttribute("page");
+		if(page == null)page = "1";
+		
+		// 중복체크
+		Map<String, String> map = new HashMap();
+		map.put("mbId", loginVO.getId());
+		map.put("mbPw", loginVO.getPw());
 		
 		
-		//대시보드 리스트 보여주기
-		@GetMapping("mbEditList")
-		public ModelAndView mbListEdit(@RequestParam("mbSeq") String mbSeq, HttpServletRequest request) {
+		// 중복체크
+		int dupleCheck = userService.mbDuplicationCheck(map);
+		System.out.println(dupleCheck);
+
+		if(dupleCheck > 0) { // 가입되있으면  
+			String alertText = "중복이거나 유효하지 않은 접근입니다";
+			String redirectPath = "/main";
+			System.out.println(loginVO.getAdmin());
+			if(loginVO.getAdmin() != null) {
+				redirectPath = "/main/mbList?page="+page;
+			}
+			CommonUtils.redirect(alertText, redirectPath, response);
+		}else {
 			
-			ModelAndView mav = new ModelAndView();
-			// 해당리스트 가져옴
-			mav = mbListCall(request);  
-			Map map = new HashMap<String, String>();
-			map.put("mbSeq", mbSeq);
-			LoginDomain loginDomain = userService.mbSelectList(map);
-			mav.addObject("item",loginDomain);
-			mav.setViewName("admin/adminEditList.html");
-			return mav; 
-		}
-		//수정업데이트
-		@RequestMapping("/update")
-		public ModelAndView mbModify(LoginVO loginVO, HttpServletRequest request, RedirectAttributes re) throws IOException {
-			
-			ModelAndView mav = new ModelAndView();
-			
-			//page 초기화
-			HttpSession session = request.getSession();
-			
-			String page = "1"; // 업데이트 되면 가장 첫화면으로 갈 것이다.  
-			
-			//db 업데이트
-			LoginDomain loginDomain = null; //초기화
+			//현재아이피 추출
 			String IP = CommonUtils.getClientIP(request);
-			loginDomain = LoginDomain.builder()
-					.mbSeq(Integer.parseInt(loginVO.getSeq()))
+			
+//			//자동생성 
+//			for (int i = 1; i < 32; i++) {
+//				
+//				LoginDomain loginDomain = null; //초기화
+//				loginDomain = LoginDomain.builder()
+//						.mbId(loginVO.getId()+i)
+//						.mbPw(loginVO.getId())
+//						.mbLevel("2")
+//						.mbIp(IP)
+//						.mbUse("Y")
+//						.build();
+//				
+//				// 저장
+//				userService.mbCreate(loginDomain);
+//			}
+//			mav.setViewName("redirect:/mbList?page=1");
+			
+			
+			//전체 갯수
+			int totalcount = userService.mbGetAll();
+			
+			//db insert 준비
+			LoginDomain loginDomain = LoginDomain.builder()
 					.mbId(loginVO.getId())
 					.mbPw(loginVO.getPw())
-					.mbLevel(loginVO.getLevel())
+					.mbLevel((totalcount == 0) ? "3" : "2")  // 최초가입자를 level 3 admin 부여
 					.mbIp(IP)
 					.mbUse("Y")
 					.build();
-			userService.mbUpdate(loginDomain);
-			
-			//첫 페이지로 이동
-			re.addAttribute("page",page); // 리다이렉트시 파람으로 실어서 보냄
-			mav.setViewName("redirect:/mbList");
-			return mav;
-		}
 		
-		//삭제
-		@GetMapping("/remove/{mbSeq}")
-	    public ModelAndView mbRemove(@PathVariable("mbSeq") String mbSeq, RedirectAttributes re, HttpServletRequest request) throws IOException {
-			ModelAndView mav = new ModelAndView();
+			// 저장
+			userService.mbCreate(loginDomain);
 			
-			//db 삭제
-			Map map = new HashMap<String, String>();
-			map.put("mbSeq", mbSeq);
-			userService.mbRemove(map);
-
-			//page 초기화
-			HttpSession session = request.getSession();
-					
-			//보고 있던 현재 페이지로 이동
-			re.addAttribute("page",session.getAttribute("page")); // 리다이렉트시 파람으로 실어서 보냄
-			mav.setViewName("redirect:/mbList");
-			return mav;
-		}
-		
-		// 어드민의 멤버추가 & 회원가입
-		@PostMapping("create")
-		public ModelAndView create(LoginVO loginVO, HttpServletRequest request,HttpServletResponse response) throws IOException {
-			
-			ModelAndView mav = new ModelAndView();
-			
-			//session 처리 
-			HttpSession session = request.getSession();
-			
-			//페이지 초기화
-			String page = (String) session.getAttribute("page");
-			if(page == null)page = "1";
-			
-			// 중복체크
-			Map<String, String> map = new HashMap();
-			map.put("mbId", loginVO.getId());
-			map.put("mbPw", loginVO.getPw());
-			
-			
-			// 중복체크
-			int dupleCheck = userService.mbDuplicationCheck(map);
-			System.out.println(dupleCheck);
-
-			if(dupleCheck > 0) { // 가입되있으면  
-				String alertText = "중복이거나 유효하지 않은 접근입니다";
-				String redirectPath = "/main";
-				System.out.println(loginVO.getAdmin());
-				if(loginVO.getAdmin() != null) {
-					redirectPath = "/main/mbList?page="+page;
-				}
-				CommonUtils.redirect(alertText, redirectPath, response);
-			}else {
-				
-				//현재아이피 추출
-				String IP = CommonUtils.getClientIP(request);
-				
-				//전체 갯수
-				int totalcount = userService.mbGetAll();
-				
-				//db insert 준비
-				LoginDomain loginDomain = LoginDomain.builder()
-						.mbId(loginVO.getId())
-						.mbPw(loginVO.getPw())
-						.mbLevel((totalcount == 0) ? "3" : "2") // 최초가입자를 level 3 admin 부여
-						.mbIp(IP)
-						.mbUse("Y")
-						.build();
-				
-	       // 저장
-				userService.mbCreate(loginDomain);
-				
-				if(loginVO.getAdmin() == null) { // 'admin'들어있을때는 alert 스킵이다
-					// session 저장 
-					session.setAttribute("ip",IP);
-					session.setAttribute("id", loginDomain.getMbId());
-					session.setAttribute("mbLevel", (totalcount == 0) ? "3" : "2");   // 최초가입자를 level 3 admin 부여
-					mav.setViewName("redirect:/bdList");
-				}else { // admin일때
-					mav.setViewName("redirect:/mbList?page=1");
-				}
+			if(loginVO.getAdmin() == null) { // 'admin'들어있을때는 alert 스킵이다
+				// session 저장 
+				session.setAttribute("ip",IP);
+				session.setAttribute("id", loginDomain.getMbId());
+				session.setAttribute("mbLevel", (totalcount == 0) ? "3" : "2");   // 최초가입자를 level 3 admin 부여
+				mav.setViewName("redirect:/bdList");
+			}else { // admin일때
+				mav.setViewName("redirect:/mbList?page=1");
 			}
-			
-			return mav;
-
 		}
 		
-		// 회원가입 화면
-		@GetMapping("signin")
-	    public ModelAndView signIn() throws IOException {
-			ModelAndView mav = new ModelAndView();
-	        mav.setViewName("signin/signin.html"); 
-	        return mav;
-	    }
-		//로그아웃
-		@RequestMapping("logout")
-		public ModelAndView logout(HttpServletRequest request) {
-			ModelAndView mav = new ModelAndView();
-			HttpSession session = request.getSession();
-			session.invalidate(); // 전체삭제
-			mav.setViewName("index.html");
-			return mav;
-		}
+		return mav;
+
+	}
+		
+		
+	// 회원가입 화면
+	@GetMapping("signin")
+    public ModelAndView signIn() throws IOException {
+		ModelAndView mav = new ModelAndView();
+        mav.setViewName("signin/signin.html"); 
+        return mav;
+    }
+	
+	//로그아웃
+	@RequestMapping("logout")
+	public ModelAndView logout(HttpServletRequest request) {
+		ModelAndView mav = new ModelAndView();
+		HttpSession session = request.getSession();
+		session.invalidate(); // 전체삭제
+		mav.setViewName("index.html");
+		return mav;
+	}
 }
